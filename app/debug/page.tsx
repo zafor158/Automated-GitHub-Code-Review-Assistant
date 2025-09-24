@@ -24,7 +24,9 @@ export default function DebugOAuth() {
         type: response.type
       });
     } catch (error) {
-      setDebugInfo({ error: error.message });
+      setDebugInfo({ 
+        error: error instanceof Error ? error.message : String(error)
+      });
     } finally {
       setLoading(false);
     }
