@@ -58,6 +58,10 @@ export default function RepositoryList() {
     }));
 
     try {
+      // First, navigate to analysis page
+      window.location.href = `/repository-analysis?owner=${repo.owner}&repo=${repo.name}`;
+      
+      // Then setup webhook in background
       const response = await fetch('/api/webhook/setup', {
         method: 'POST',
         headers: {
