@@ -62,14 +62,18 @@ git push -u origin main
 
 In Vercel dashboard, go to your project → Settings → Environment Variables:
 
-```
-GITHUB_CLIENT_ID = Ov23li02z8N030wx4Fxs
-GITHUB_CLIENT_SECRET = 1c9e2492a052d38decd131aa51da8e1a60456b9b
-GITHUB_WEBHOOK_SECRET = aIZvuktWbBD0Rcel9IIVTKyEfrnWVVRh
-GROQ_API_KEY = gsk_Esdv77lGcgsFIrCMOAMmWGdyb3FYhqo7q2ICxdQz6LNw
-NEXTAUTH_URL = https://your-app.vercel.app
-NEXTAUTH_SECRET = OwUnt11MNK6zRcpWNQ8U6CZ8rL5iOxMQ
-```
+**Add these environment variables one by one:**
+
+| Variable Name | Value | Description |
+|---------------|-------|-------------|
+| `GITHUB_CLIENT_ID` | `your_github_client_id` | From your GitHub OAuth App |
+| `GITHUB_CLIENT_SECRET` | `your_github_client_secret` | From your GitHub OAuth App |
+| `GITHUB_WEBHOOK_SECRET` | `your_random_webhook_secret` | Random 32+ character string |
+| `GROQ_API_KEY` | `your_groq_api_key` | From Groq Console |
+| `NEXTAUTH_URL` | `https://your-app.vercel.app` | Your Vercel deployment URL |
+| `NEXTAUTH_SECRET` | `your_random_nextauth_secret` | Random 32+ character string |
+
+**Important:** Replace `your-app.vercel.app` with your actual Vercel deployment URL.
 
 ### Step 4: Update GitHub OAuth App
 
