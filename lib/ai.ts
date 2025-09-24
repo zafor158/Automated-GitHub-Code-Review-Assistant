@@ -1,9 +1,5 @@
 import Groq from 'groq-sdk';
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 interface CodeAnalysisContext {
   title: string;
   description: string;
@@ -36,6 +32,10 @@ export async function analyzeCodeWithAI(
     if (!process.env.GROQ_API_KEY) {
       throw new Error('Groq API key not configured');
     }
+
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
 
     const prompt = createAnalysisPrompt(diff, context);
     

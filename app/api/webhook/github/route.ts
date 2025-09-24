@@ -121,7 +121,11 @@ export async function POST(request: NextRequest) {
 
 // Handle other HTTP methods
 export async function GET() {
-  return NextResponse.json({ message: 'GitHub webhook endpoint' }, { status: 200 });
+  return NextResponse.json({ 
+    message: 'GitHub webhook endpoint',
+    status: 'ready',
+    methods: ['POST']
+  }, { status: 200 });
 }
 
 function formatAIComment(analysis: any): string {
