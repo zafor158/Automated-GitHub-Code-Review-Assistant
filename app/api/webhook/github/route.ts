@@ -1,0 +1,156 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyGitHubSignature } from '@/lib/crypto';
+import { fetchPullRequestDiff, postPullRequestComment } from '@/lib/github';
+import { fetchPullRequestDiffOAuth, postPullRequestCommentOAuth } from '@/lib/github-oauth';
+import { analyzeCodeWithAI } from '@/lib/ai';
+
+export async function POST(request: NextRequest) {
+  try {
+    // Get the raw body for signature verification
+    const body = await request.text();
+    const signature = request.headers.get('x-hub-signature-256');
+    const event = request.headers.get('x-github-event');
+
+    // Verify webhook signature
+    const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error('GITHUB_WEBHOOK_SECRET not configured');
+      return NextResponse.json(
+        { error: 'Webhook secret not configured' },
+        { status: 500 }
+      );
+    }
+
+    if (!signature || !verifyGitHubSignature(body, signature, webhookSecret)) {
+      console.error('Invalid webhook signature');
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+    // Only handle pull request events
+    if (event !== 'pull_request') {
+      return NextResponse.json({ message: 'Event not handled' }, { status: 200 });
+    }
+
+    // Parse the webhook payload
+    const payload = JSON.parse(body);
+    const { action, pull_request, repository } = payload;
+
+    // Only process when a pull request is opened
+    if (action !== 'opened') {
+      return NextResponse.json({ message: 'Action not handled' }, { status: 200 });
+    }
+
+    const { number: pullNumber, head, base } = pull_request;
+    const { owner, name: repo } = repository;
+    const ownerName = owner.login;
+
+    console.log(`Processing PR #${pullNumber} in ${ownerName}/${repo}`);
+
+    // Try to fetch the pull request diff using GitHub App first, then fallback to OAuth
+    let diff: string;
+    let accessToken: string | null = null;
+
+    try {
+      // First try with GitHub App authentication
+      diff = await fetchPullRequestDiff(ownerName, repo, pullNumber);
+    } catch (error) {
+      console.log('GitHub App auth failed, trying OAuth...');
+      
+      // For OAuth fallback, we need to get the access token from the repository owner
+      // This is a simplified approach - in production, you'd want to store user tokens
+      // and retrieve them based on the repository owner
+      const token = request.headers.get('x-github-token');
+      if (!token) {
+        throw new Error('No authentication method available');
+      }
+      
+      accessToken = token;
+      diff = await fetchPullRequestDiffOAuth(accessToken, ownerName, repo, pullNumber);
+    }
+    
+    if (!diff) {
+      console.error('No diff found for PR');
+      return NextResponse.json(
+        { error: 'No diff found' },
+        { status: 400 }
+      );
+    }
+
+    // Analyze the code with AI
+    const aiAnalysis = await analyzeCodeWithAI(diff, {
+      title: pull_request.title,
+      description: pull_request.body || '',
+      author: pull_request.user.login,
+      baseBranch: base.ref,
+      headBranch: head.ref,
+    });
+
+    if (!aiAnalysis) {
+      console.error('AI analysis failed');
+      return NextResponse.json(
+        { error: 'AI analysis failed' },
+        { status: 500 }
+      );
+    }
+
+    // Post the AI analysis as a comment
+    const comment = formatAIComment(aiAnalysis);
+    
+    if (accessToken) {
+      await postPullRequestCommentOAuth(accessToken, ownerName, repo, pullNumber, comment);
+    } else {
+      await postPullRequestComment(ownerName, repo, pullNumber, comment);
+    }
+
+    return NextResponse.json({
+      message: 'Webhook processed successfully',
+      pr: `${ownerName}/${repo}#${pullNumber}`,
+    });
+
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// Handle other HTTP methods
+export async function GET() {
+  return NextResponse.json({ message: 'GitHub webhook endpoint' }, { status: 200 });
+}
+
+function formatAIComment(analysis: any): string {
+  const { summary, issues, suggestions, score } = analysis;
+  
+  let comment = `## 🤖 AI Code Review\n\n`;
+  comment += `**Overall Score: ${score}/10**\n\n`;
+  comment += `### 📋 Summary\n${summary}\n\n`;
+
+  if (issues && issues.length > 0) {
+    comment += `### ⚠️ Issues Found\n`;
+    issues.forEach((issue: any, index: number) => {
+      comment += `${index + 1}. **${issue.type}**: ${issue.description}\n`;
+      if (issue.line) {
+        comment += `   - Line ${issue.line}: \`${issue.code}\`\n`;
+      }
+    });
+    comment += `\n`;
+  }
+
+  if (suggestions && suggestions.length > 0) {
+    comment += `### 💡 Suggestions\n`;
+    suggestions.forEach((suggestion: any, index: number) => {
+      comment += `${index + 1}. ${suggestion}\n`;
+    });
+    comment += `\n`;
+  }
+
+  comment += `---\n*This review was generated by an AI assistant. Please review the suggestions and apply them as appropriate.*`;
+
+  return comment;
+}
