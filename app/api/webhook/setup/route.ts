@@ -21,11 +21,12 @@ export async function POST(request: NextRequest) {
       auth: token,
     });
 
-    // For local development, we can't create real webhooks
-    // Instead, we'll simulate the connection and provide instructions
-    const isLocalhost = process.env.NEXTAUTH_URL?.includes('localhost');
+    // Check if we're in production (Vercel deployment)
+    // Vercel URLs are publicly accessible, so we can create real webhooks
+    const isProduction = process.env.NEXTAUTH_URL?.startsWith('https://') && 
+                         !process.env.NEXTAUTH_URL?.includes('localhost');
     
-    if (isLocalhost) {
+    if (!isProduction) {
       return NextResponse.json({
         message: 'Local development mode - webhook simulation',
         webhook: {
